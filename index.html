@@ -1,646 +1,452 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1500, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能污衣籃</title>
-
-    <!-- TensorFlow.js + 模型 -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+    <!-- 引入 Tailwind CSS 以實現專業且整潔的 UI 設計 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 TensorFlow.js 核心與模型 (提供機器學習功能) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+    
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        html, body {
-            overflow: hidden;
+        /* 自訂樣式，防止在手機或平板長按按鈕時反白文字或觸發選單 */
+        .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: manipulation;
         }
-        body {
-            font-family: "Microsoft JhengHei", "Segoe UI", sans-serif;
-            background: linear-gradient(135deg, #90ee90 0%, #228b22 100%);
-            min-height: 100vh;
-            color: #333;
-            width: 1500px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            padding: 25px 0;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-        .header h1 {
-            font-size: 3rem;
-            margin-bottom: 12px;
-            text-shadow: 0 3px 10px rgba(0,0,0,0.6);
-        }
-        #connectBtn, #connectBtnB {
-            background: #ff9800;
-            color: white;
-            border: none;
-            padding: 15px 40px;
-            font-size: 1.3rem;
-            border-radius: 50px;
-            cursor: pointer;
-            box-shadow: 0 8px 25px rgba(255,152,0,0.5);
-            transition: all 0.3s;
-            margin-left: 10px;
-        }
-        #connectBtn:hover, #connectBtnB:hover { transform: translateY(-4px); }
-        #connectionStatus {
-            font-size: 1.2rem;
-            margin-left: 10px;
-        }
-        .success { color: #00ff00; }
-        .error { color: #ff0000; }
-
-        .main-container {
-            display: flex;
-            gap: 30px;
-            padding: 30px;
-            max-width: 1500px;
-            margin: 0 auto;
-            flex-wrap: nowrap; /* 防止換行 */
-        }
-        .left-panel {
-            flex: 1;
-            min-width: 320px;
-            max-width: 400px;
-            background: white;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.25);
-        }
-        .camera-panel {
-            flex: 2;
-            min-width: 320px;
-            max-width: 800px;
-            background: white;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.25);
-        }
-        .right-panel {
-            flex: 1;
-            min-width: 320px;
-            max-width: 400px;
-            background: white;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.25);
-        }
-        .panel-title {
-            text-align: center;
-            font-size: 1.7rem;
-            color: #228b22;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        #webcam {
-            width: 640px;
-            height: 480px;
-            border-radius: 16px;
-            border: 5px solid #e0e0e0;
-            display: block;
-            margin: 0 auto 20px;
+        /* 鏡頭水平翻轉效果 */
+        .flip-h {
             transform: scaleX(-1);
-            object-fit: cover;
         }
-        .control-row {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin: 18px 0;
+        /* 美化捲動條 */
+        ::-webkit-scrollbar {
+            width: 8px;
         }
-        .learn-buttons button {
-            background: #228b22;
-            color: white;
-            border: none;
-            padding: 14px 20px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
         }
-        .learn-buttons button:hover { background: #006400; transform: scale(1.05); }
-        .learn-buttons button.learning {
-            background: #ff4500; /* 學習中效果：改變顏色 */
-            transform: scale(1.1);
-            box-shadow: 0 0 10px rgba(255, 69, 0, 0.7);
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
         }
-        .learn-buttons button.active {
-            background: #ffd700; /* 激活顏色效果 */
-            color: #333;
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
-        }
-
-        .recognize-buttons button {
-            padding: 16px 32px;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #startRecognize { background: #4caf50; }
-        #stopRecognize { background: #f44336; }
-        #stopRecognize:disabled { background: #999; cursor: not-allowed; }
-
-        .status-table {
-            width: 100%;
-            margin-top: 25px;
-            border-collapse: collapse;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-        }
-        .status-table th {
-            background: #228b22;
-            color: white;
-            padding: 14px;
-        }
-        .status-table td { padding: 12px; text-align: center; }
-        .status-table tr:nth-child(even) { background: #f8f5ff; }
-        .status-table progress {
-            width: 100%;
-            height: 20px;
-            border-radius: 10px;
-        }
-
-        #currentRecognition {
-            margin-top: 20px;
-            text-align: center;
-            font-size: 1.2rem;
-        }
-
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-        }
-        .basket {
-            height: 150px;
-            background: #f0f0f0;
-            border-radius: 10px;
-            position: relative;
-            overflow: hidden;
-            text-align: center;
-            padding-top: 10px;
-        }
-        .basket-label {
-            font-weight: bold;
-        }
-        .fill {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 0%;
-            background: #4caf50;
-            transition: height 0.5s ease;
-        }
-        .fill.full {
-            background: red;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            50% { opacity: 0.5; }
-        }
-
-        #dataButtons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        #exportBtn, #importBtn {
-            background: #228b22;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        #importFile {
-            display: none;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
         }
     </style>
 </head>
-<body>
-    <div class="header">
-        <h1>智能污衣籃</h1>
-        <button id="connectBtn">連接 Micro:bit A</button>
-        <button id="connectBtnB">連接 Micro:bit B</button>
-        <span id="connectionStatus"></span>
-    </div>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-    <div class="main-container">
-        <div class="left-panel">
-            <h2 class="panel-title">學習資訊</h2>
-            <table class="status-table">
-                <thead>
-                    <tr>
-                        <th>類別</th>
-                        <th>訓練計數</th>
-                        <th>相似度</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- 類型 -->
-                    <tr><td>衫褲</td><td id="countType1">0</td><td><progress id="simType1" value="0" max="1"></progress></td></tr>
-                    <tr><td>內衣褲、襪子</td><td id="countType2">0</td><td><progress id="simType2" value="0" max="1"></progress></td></tr>
-                    <tr><td>背景</td><td id="countType0">0</td><td><progress id="simType0" value="0" max="1"></progress></td></tr>
-                    <!-- 顏色 -->
-                    <tr><td>白色</td><td id="countColor1">0</td><td><progress id="simColor1" value="0" max="1"></progress></td></tr>
-                    <tr><td>黑色</td><td id="countColor2">0</td><td><progress id="simColor2" value="0" max="1"></progress></td></tr>
-                </tbody>
-            </table>
-            <div id="currentRecognition">
-                <p id="currentType">種類: 無</p>
-                <p id="currentColor">顏色: 無</p>
-                <p id="lastSent">最後傳送: 無</p>
+    <!-- 頂部標題與連接區域 -->
+    <header class="bg-white shadow-sm py-6 mb-6">
+        <h1 class="text-4xl font-extrabold text-center text-indigo-600 mb-6 tracking-wide">智能污衣籃</h1>
+        <div class="flex justify-center gap-6">
+            <button id="btnConnectA" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-full shadow-md transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.545 1.058a2 2 0 0 1 2.91 0l5.485 5.485a2 2 0 0 1 0 2.91l-5.485 5.485a2 2 0 0 1-2.91 0L1.06 9.453a2 2 0 0 1 0-2.91l5.485-5.485zM8 2.473L2.473 8 8 13.527 13.527 8 8 2.473z"/></svg>
+                連接 Microbit A
+            </button>
+            <button id="btnConnectB" class="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-bold rounded-full shadow-md transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.545 1.058a2 2 0 0 1 2.91 0l5.485 5.485a2 2 0 0 1 0 2.91l-5.485 5.485a2 2 0 0 1-2.91 0L1.06 9.453a2 2 0 0 1 0-2.91l5.485-5.485zM8 2.473L2.473 8 8 13.527 13.527 8 8 2.473z"/></svg>
+                連接 Microbit B
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 pb-12 flex flex-col lg:flex-row gap-8">
+        
+        <!-- 左側面板：列表與狀態列 -->
+        <div class="w-full lg:w-1/3 flex flex-col gap-6">
+            <!-- 資訊列表 -->
+            <div class="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+                <h2 class="text-xl font-bold text-slate-700 mb-4 border-b pb-2">AI 學習與辨認狀態</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-slate-500 text-sm">
+                                <th class="pb-3">類別</th>
+                                <th class="pb-3 text-center">相似度</th>
+                                <th class="pb-3 text-center">已學習相片數量</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classTableBody" class="text-sm font-medium">
+                            <!-- 透過 JS 動態產生 -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div id="dataButtons">
-                <button id="exportBtn">匯出學習資料</button>
-                <label for="importFile">
-                    <button id="importBtn">匯入學習資料</button>
-                </label>
-                <input type="file" id="importFile" accept=".json">
+
+            <!-- 傳輸狀態列 (Logs) -->
+            <div class="bg-slate-800 rounded-xl shadow-md p-5 flex-grow flex flex-col">
+                <h2 class="text-lg font-bold text-slate-200 mb-3 border-b border-slate-600 pb-2">藍芽發送紀錄</h2>
+                <div id="logContainer" class="flex-grow overflow-y-auto h-48 font-mono text-xs text-green-400 flex flex-col gap-1">
+                    <div class="text-slate-400">系統已就緒，等待連接...</div>
+                </div>
             </div>
         </div>
 
-        <div class="camera-panel">
-            <h2 class="panel-title">即時衣物辨識系統</h2>
-            <video id="webcam" autoplay playsinline></video>
-
-            <div class="control-row learn-buttons">
-                <h3>衣物類型訓練</h3>
-                <button id="learnType1">學習衫褲</button>
-                <button id="learnType2">學習內衣褲、襪子</button>
-                <button id="learnTypeBg">學習背景</button>
+        <!-- 右側面板：鏡頭與控制區域 -->
+        <div class="w-full lg:w-2/3 flex flex-col gap-4">
+            
+            <!-- 攝影機顯示區 -->
+            <div class="relative bg-black rounded-xl overflow-hidden shadow-lg aspect-video flex justify-center items-center">
+                <video id="webcam" autoplay playsinline class="w-full h-full object-cover flip-h"></video>
+                <!-- 載入中遮罩 -->
+                <div id="loadingOverlay" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white z-10">
+                    <svg class="animate-spin h-10 w-10 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-lg font-bold tracking-widest">AI 模型載入中...</p>
+                </div>
             </div>
 
-            <div class="control-row learn-buttons">
-                <h3>衣物顏色訓練</h3>
-                <button id="learnColorWhite">學習白色</button>
-                <button id="learnColorBlack">學習黑色</button>
+            <!-- 鏡頭主要控制列 -->
+            <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <button id="btnFlipCamera" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition-colors flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+                    水平翻轉影像
+                </button>
+                <button id="btnTogglePredict" disabled class="px-8 py-3 bg-indigo-100 text-indigo-400 font-bold rounded-lg shadow-sm transition-all cursor-not-allowed">
+                    開始辨認
+                </button>
             </div>
 
-            <div class="control-row recognize-buttons">
-                <button id="startRecognize">開始辨識</button>
-                <button id="stopRecognize" disabled>停止辨識</button>
+            <!-- 學習按鈕區域 -->
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">長按按鈕進行學習 (最高50張/類別)</h3>
+                <div class="flex flex-wrap gap-3 justify-center" id="trainingButtonsContainer">
+                    <!-- 透過 JS 動態產生學習按鈕 -->
+                </div>
             </div>
+
         </div>
-
-        <div class="right-panel">
-            <h2 class="panel-title">污衣籃狀態</h2>
-            <div class="grid-container">
-                <div class="basket" id="blackBasket1">
-                    <span class="basket-label">黑色衣物籃 1</span>
-                    <div class="fill" id="fillBlack1"></div>
-                </div>
-                <div class="basket" id="whiteBasket1">
-                    <span class="basket-label">白色衣物籃 1</span>
-                    <div class="fill" id="fillWhite1"></div>
-                </div>
-                <div class="basket" id="blackBasket2">
-                    <span class="basket-label">黑色衣物籃 2</span>
-                    <div class="fill" id="fillBlack2"></div>
-                </div>
-                <div class="basket" id="whiteBasket2">
-                    <span class="basket-label">白色衣物籃 2</span>
-                    <div class="fill" id="fillWhite2"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+    </main>
 
     <script>
-        let uBitDevice = null;
-        let rxCharacteristic = null;
-        let uBitDeviceB = null;
-        let rxCharacteristicB = null;
-        const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-        const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+        /**
+         * 系統核心設定與資料結構
+         */
+        const CLASSES = [
+            { id: 0, name: '深色衫', command: '1\n', color: 'bg-gray-800' },
+            { id: 1, name: '淺色衫', command: '2\n', color: 'bg-yellow-100' },
+            { id: 2, name: '內衣褲', command: '3\n', color: 'bg-pink-300' },
+            { id: 3, name: '襪', command: '4\n', color: 'bg-orange-400' },
+            { id: 4, name: '背景', command: 'BG\n', color: 'bg-slate-400' }
+        ];
+        
+        const MAX_SAMPLES = 50;
+        const PREDICT_THRESHOLD = 0.65; // 相似度大於 65% 才判定為該類別
+        const COOLDOWN_MS = 7000;       // 發送至 Micro:bit 的冷卻時間 (7秒)
 
-        let net;
-        let classifierType = knnClassifier.create(); // 類型分類器
-        let classifierColor = knnClassifier.create(); // 顏色分類器
-        let countsType = {0:0,1:0,2:0};
-        let countsColor = {1:0,2:0};
-        let learningInterval;
-        let recognizing = false;
-        let currentColorId = null;
-        let colorButtons = {};
+        // 狀態變數
+        let classData = CLASSES.map(c => ({ ...c, count: 0, similarity: 0 }));
+        let isPredicting = false;
+        let lastSendTime = 0;
+        let trainInterval = null;
 
-        const typeNames = {1: '衫褲', 2: '內衣褲、襪子', 0: '背景'};
-        const colorNames = {1: '白色', 2: '黑色'};
+        // ML 模型
+        let classifier;
+        let mobilenetModule;
 
-        function setStatus(msg, className) {
-            const el = document.getElementById('connectionStatus');
-            el.innerText = msg;
-            el.className = className || '';
+        // 藍芽設備儲存 (使用 Nordic UART Service 規格)
+        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const NUS_RX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Microbit RX (我們傳送目標)
+        let microbitA_Char = null;
+        let microbitB_Char = null;
+
+        // DOM 元素
+        const videoElement = document.getElementById('webcam');
+        const classTableBody = document.getElementById('classTableBody');
+        const trainingButtonsContainer = document.getElementById('trainingButtonsContainer');
+        const logContainer = document.getElementById('logContainer');
+        const btnTogglePredict = document.getElementById('btnTogglePredict');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        /**
+         * 初始化介面 (生成表格與按鈕)
+         */
+        function initUI() {
+            // 生成表格
+            classTableBody.innerHTML = '';
+            classData.forEach((c) => {
+                classTableBody.innerHTML += `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td class="py-3 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full ${c.color} border border-slate-300"></span>
+                            ${c.name}
+                        </td>
+                        <td class="py-3 text-center">
+                            <span id="sim-${c.id}" class="px-2 py-1 bg-slate-100 rounded-md text-slate-600 font-mono">0%</span>
+                        </td>
+                        <td class="py-3 text-center">
+                            <span id="count-${c.id}" class="px-2 py-1 bg-blue-50 text-blue-600 rounded-md font-mono">0 / 50</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // 生成學習按鈕
+            trainingButtonsContainer.innerHTML = '';
+            classData.forEach((c) => {
+                const btn = document.createElement('button');
+                btn.className = `no-select flex-1 min-w-[120px] px-4 py-3 rounded-lg text-white font-bold shadow-md transition-transform active:scale-95 ${c.color} ${c.color === 'bg-yellow-100' ? 'text-slate-700' : ''}`;
+                btn.innerText = `學習${c.name}`;
+                
+                // 綁定長按事件 (支援滑鼠與觸控)
+                const startTrain = (e) => { e.preventDefault(); startTrainingHandler(c.id); };
+                const stopTrain = (e) => { e.preventDefault(); stopTrainingHandler(); };
+                
+                btn.addEventListener('mousedown', startTrain);
+                btn.addEventListener('touchstart', startTrain, {passive: false});
+                
+                btn.addEventListener('mouseup', stopTrain);
+                btn.addEventListener('mouseleave', stopTrain);
+                btn.addEventListener('touchend', stopTrain);
+                
+                trainingButtonsContainer.appendChild(btn);
+            });
         }
 
-        // 連接 Micro:bit A
-        async function connectBluetooth() {
-            try {
-                setStatus('連接 A 中...', '');
-                uBitDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: "BBC micro:bit" }],
-                    optionalServices: [UART_SERVICE_UUID]
-                });
-
-                uBitDevice.addEventListener("gattserverdisconnected", () => onBluetoothDisconnected('A'));
-                const server = await uBitDevice.gatt.connect();
-                const service = await server.getPrimaryService(UART_SERVICE_UUID);
-
-                const txChar = await service.getCharacteristic(UART_TX_CHARACTERISTIC_UUID);
-                await txChar.startNotifications();
-                txChar.addEventListener("characteristicvaluechanged", event => handleBluetoothData(event, 'A'));
-
-                rxCharacteristic = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
-
-                setStatus('✅ A 已連接', 'success');
-            } catch (e) {
-                setStatus('❌ A 連接失敗: ' + e.message, 'error');
-                console.error(e);
-            }
-        }
-
-        // 連接 Micro:bit B
-        async function connectBluetoothB() {
-            try {
-                setStatus('連接 B 中...', '');
-                uBitDeviceB = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: "BBC micro:bit" }],
-                    optionalServices: [UART_SERVICE_UUID]
-                });
-
-                uBitDeviceB.addEventListener("gattserverdisconnected", () => onBluetoothDisconnected('B'));
-                const server = await uBitDeviceB.gatt.connect();
-                const service = await server.getPrimaryService(UART_SERVICE_UUID);
-
-                const txChar = await service.getCharacteristic(UART_TX_CHARACTERISTIC_UUID);
-                await txChar.startNotifications();
-                txChar.addEventListener("characteristicvaluechanged", event => handleBluetoothData(event, 'B'));
-
-                rxCharacteristicB = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
-
-                setStatus('✅ B 已連接', 'success');
-            } catch (e) {
-                setStatus('❌ B 連接失敗: ' + e.message, 'error');
-                console.error(e);
-            }
-        }
-
-        function onBluetoothDisconnected(device) {
-            setStatus(`⚠️ Micro:bit ${device} 已斷線`, 'error');
-            if (device === 'A') {
-                uBitDevice = null;
-                rxCharacteristic = null;
-            } else {
-                uBitDeviceB = null;
-                rxCharacteristicB = null;
-            }
-        }
-
-        function handleBluetoothData(event, device) {
-            const value = event.target.value;
-            const text = new TextDecoder().decode(value).trim();
-            if (text) {
-                console.log(`micro:bit ${device} 傳來:`, text);
-                if (device === 'B') {
-                    // 處理污衣籃狀況
-                    const X = text[0];
-                    const Y = parseInt(text.slice(1));
-                    if (!isNaN(Y) && Y >= 1 && Y <= 60) {
-                        const fillPercent = ((60 - Y) / 59) * 100;
-                        let fillElement;
-                        if (X === 'B') {
-                            fillElement = document.getElementById('fillBlack1'); // 假設更新第一個黑色籃
-                        } else if (X === 'W') {
-                            fillElement = document.getElementById('fillWhite1'); // 假設更新第一個白色籃
-                        }
-                        if (fillElement) {
-                            fillElement.style.height = `${fillPercent}%`;
-                            if (fillPercent >= 100) {
-                                fillElement.classList.add('full');
-                            } else {
-                                fillElement.classList.remove('full');
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        async function sendToMicrobit(message) {
-            const data = message + "\n";
-            const encoder = new TextEncoder();
-
-            try {
-                if (rxCharacteristic) {
-                    await rxCharacteristic.writeValue(encoder.encode(data));
-                    console.log("藍牙已發送:", message);
-                    setStatus('✅ 已連接', 'success');
+        /**
+         * 更新單一類別的 UI (數量與相似度)
+         */
+        function updateClassUI(id) {
+            document.getElementById(`count-${id}`).innerText = `${classData[id].count} / ${MAX_SAMPLES}`;
+            document.getElementById(`sim-${id}`).innerText = `${Math.round(classData[id].similarity * 100)}%`;
+            
+            // 標示出目前最高相似度的項目
+            classData.forEach(c => {
+                const simBadge = document.getElementById(`sim-${c.id}`);
+                if (c.id === id && classData[id].similarity > PREDICT_THRESHOLD) {
+                    simBadge.classList.replace('bg-slate-100', 'bg-green-100');
+                    simBadge.classList.replace('text-slate-600', 'text-green-700');
                 } else {
-                    setStatus('⚠️ 無連線，無法發送', 'error');
+                    simBadge.classList.replace('bg-green-100', 'bg-slate-100');
+                    simBadge.classList.replace('text-green-700', 'text-slate-600');
                 }
+            });
+        }
+
+        /**
+         * 日誌輸出
+         */
+        function logMsg(msg, isSystem = false) {
+            const time = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+            const div = document.createElement('div');
+            div.innerText = `[${time}] ${msg}`;
+            if (isSystem) div.classList.add('text-blue-300');
+            
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        /**
+         * 攝影機設定
+         */
+        async function setupWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user', width: 640, height: 480 }, 
+                    audio: false 
+                });
+                videoElement.srcObject = stream;
+                return new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => { resolve(); };
+                });
             } catch (err) {
-                setStatus('❌ 發送失敗: ' + err.message, 'error');
+                alert("無法存取攝影機，請允許權限！");
                 console.error(err);
             }
         }
 
+        // 水平翻轉控制
+        document.getElementById('btnFlipCamera').addEventListener('click', () => {
+            videoElement.classList.toggle('flip-h');
+        });
+
+        /**
+         * 機器學習初始化
+         */
         async function initML() {
-            net = await mobilenet.load();
+            classifier = knnClassifier.create();
+            mobilenetModule = await mobilenet.load({ version: 2, alpha: 1.0 });
+            
+            // 模型與攝影機都載入完畢
+            loadingOverlay.classList.add('hidden');
+            logMsg('✅ AI模型載入完成。準備就緒。', true);
+
+            // 啟用辨認按鈕
+            btnTogglePredict.disabled = false;
+            btnTogglePredict.classList.replace('bg-indigo-100', 'bg-indigo-600');
+            btnTogglePredict.classList.replace('text-indigo-400', 'text-white');
+            btnTogglePredict.classList.remove('cursor-not-allowed');
+            btnTogglePredict.classList.add('hover:bg-indigo-700');
         }
 
-        function addExample(classifier, counts, classId, prefix) {
-            const img = tf.browser.fromPixels(document.getElementById('webcam'));
-            const activation = net.infer(img, true);
-            classifier.addExample(activation, classId);
-            counts[classId]++;
-            document.getElementById(`count${prefix}${classId}`).innerText = counts[classId];
-            img.dispose();
-        }
+        /**
+         * 訓練(學習)邏輯
+         */
+        function startTrainingHandler(classId) {
+            if (trainInterval) return;
+            if (classData[classId].count >= MAX_SAMPLES) return;
 
-        function startLearning(typeId, btn) {
-            btn.classList.add('learning');
-            learningInterval = setInterval(() => {
-                addExample(classifierType, countsType, typeId, 'Type');
-                if (currentColorId !== null) {
-                    addExample(classifierColor, countsColor, currentColorId, 'Color');
+            const addFrame = () => {
+                if (classData[classId].count >= MAX_SAMPLES) {
+                    stopTrainingHandler();
+                    return;
                 }
-            }, 250);
-        }
-
-        function stopLearning(btn) {
-            btn.classList.remove('learning');
-            clearInterval(learningInterval);
-        }
-
-        function activateColor(colorId, btn) {
-            if (currentColorId === colorId) {
-                currentColorId = null;
-                btn.classList.remove('active');
-            } else {
-                Object.values(colorButtons).forEach(b => b.classList.remove('active'));
-                currentColorId = colorId;
-                btn.classList.add('active');
-            }
-        }
-
-        async function recognize() {
-            if (!recognizing) return;
-            const img = tf.browser.fromPixels(document.getElementById('webcam'));
-            const activation = net.infer(img, true);
-
-            let typeId = 0;
-            let colorId = 0;
-
-            if (classifierType.getNumClasses() > 0) {
-                const resultType = await classifierType.predictClass(activation);
-                typeId = parseInt(resultType.label);
-
-                Object.keys(resultType.confidences).forEach(c => {
-                    document.getElementById(`simType${c}`).value = resultType.confidences[c];
-                });
-            }
-
-            if (classifierColor.getNumClasses() > 0) {
-                const resultColor = await classifierColor.predictClass(activation);
-                colorId = parseInt(resultColor.label);
-
-                Object.keys(resultColor.confidences).forEach(c => {
-                    document.getElementById(`simColor${c}`).value = resultColor.confidences[c];
-                });
-            }
-
-            document.getElementById('currentType').innerText = `種類: ${typeNames[typeId] || '無'}`;
-            document.getElementById('currentColor').innerText = `顏色: ${colorNames[colorId] || '無'}`;
-
-            if (typeId >= 1 && typeId <= 2) {
-                let X = '';
-                if (colorId === 1) X = 'W';
-                else if (colorId === 2) X = 'B';
-                let Y = typeId.toString();
-                if (X) {
-                    let message = `${X}${Y}`;
-                    sendToMicrobit(message);
-                    document.getElementById('lastSent').innerText = `最後傳送: ${message}`;
-                }
-            } else if (typeId === 0) {
-                sendToMicrobit("NA");
-            }
-
-            img.dispose();
-            setTimeout(recognize, 120);
-        }
-
-        async function exportData() {
-            const data = {
-                type: await classifierType.getClassifierDataset(),
-                color: await classifierColor.getClassifierDataset()
+                // 擷取影像特徵並加入分類器
+                const img = tf.browser.fromPixels(videoElement);
+                const logits = mobilenetModule.infer(img, true);
+                classifier.addExample(logits, classId);
+                
+                classData[classId].count++;
+                updateClassUI(classId);
+                img.dispose();
             };
-            for (let key in data.type) {
-                data.type[key] = await data.type[key].array();
-            }
-            for (let key in data.color) {
-                data.color[key] = await data.color[key].array();
-            }
-            const json = JSON.stringify(data);
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'learning_data.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+
+            addFrame(); // 立即拍一張
+            trainInterval = setInterval(addFrame, 100); // 每 0.1 秒拍一張
         }
 
-        function importData(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const data = JSON.parse(e.target.result);
-                    for (let key in data.type) {
-                        data.type[key] = tf.tensor(data.type[key]);
-                    }
-                    for (let key in data.color) {
-                        data.color[key] = tf.tensor(data.color[key]);
-                    }
-                    classifierType.setClassifierDataset(data.type);
-                    classifierColor.setClassifierDataset(data.color);
-                    for (let key in data.type) {
-                        countsType[key] = data.type[key].shape[0];
-                        document.getElementById(`countType${key}`).innerText = countsType[key];
-                    }
-                    for (let key in data.color) {
-                        countsColor[key] = data.color[key].shape[0];
-                        document.getElementById(`countColor${key}`).innerText = countsColor[key];
-                    }
-                    alert('學習資料已匯入！');
-                };
-                reader.readAsText(file);
+        function stopTrainingHandler() {
+            if (trainInterval) {
+                clearInterval(trainInterval);
+                trainInterval = null;
             }
         }
 
-        document.getElementById('connectBtn').onclick = connectBluetooth;
-        document.getElementById('connectBtnB').onclick = connectBluetoothB;
+        /**
+         * 辨認邏輯與發送判斷
+         */
+        async function predictLoop() {
+            if (!isPredicting) return;
 
-        ['1','2','0'].forEach(id => {
-            const btnId = id === '0' ? 'TypeBg' : `Type${id}`;
-            const btn = document.getElementById(`learn${btnId}`);
-            btn.onmousedown = () => startLearning(parseInt(id), btn);
-            btn.onmouseup = () => stopLearning(btn);
-            btn.onmouseleave = () => stopLearning(btn);
+            if (classifier.getNumClasses() > 0) {
+                const img = tf.browser.fromPixels(videoElement);
+                const logits = mobilenetModule.infer(img, true);
+                const res = await classifier.predictClass(logits);
+                
+                // 重置所有相似度
+                classData.forEach(c => c.similarity = 0);
+                
+                // 更新當前辨認結果的相似度
+                for (const [id, conf] of Object.entries(res.confidences)) {
+                    classData[id].similarity = conf;
+                    updateClassUI(id);
+                }
+
+                // 判斷是否發送訊號
+                const bestClassId = res.label;
+                const bestConf = res.confidences[bestClassId];
+
+                if (bestConf >= PREDICT_THRESHOLD) {
+                    const now = Date.now();
+                    // 檢查 3 秒 Cooldown
+                    if (now - lastSendTime > COOLDOWN_MS) {
+                        const targetClass = classData[bestClassId];
+                        sendToMicrobits(targetClass.command, targetClass.name);
+                        lastSendTime = now;
+                    }
+                }
+                img.dispose();
+            }
+
+            // 使用 requestAnimationFrame 維持迴圈高效運行
+            requestAnimationFrame(predictLoop);
+        }
+
+        // 啟動/停止辨認按鈕
+        btnTogglePredict.addEventListener('click', () => {
+            if (classifier.getNumClasses() === 0) {
+                alert("請至少先學習一種物品的相片！");
+                return;
+            }
+
+            isPredicting = !isPredicting;
+            if (isPredicting) {
+                btnTogglePredict.innerText = "停止辨認";
+                btnTogglePredict.classList.replace('bg-indigo-600', 'bg-red-500');
+                btnTogglePredict.classList.replace('hover:bg-indigo-700', 'hover:bg-red-600');
+                logMsg('▶️ 開始影像辨認...', true);
+                predictLoop();
+            } else {
+                btnTogglePredict.innerText = "開始辨認";
+                btnTogglePredict.classList.replace('bg-red-500', 'bg-indigo-600');
+                btnTogglePredict.classList.replace('hover:bg-red-600', 'hover:bg-indigo-700');
+                logMsg('⏹️ 停止影像辨認。', true);
+            }
         });
 
-        const colorMap = {White:1, Black:2};
-        Object.keys(colorMap).forEach(key => {
-            const btn = document.getElementById(`learnColor${key}`);
-            colorButtons[key] = btn;
-            btn.onclick = () => activateColor(colorMap[key], btn);
-        });
-
-        document.getElementById('startRecognize').onclick = () => {
-            if (recognizing) return;
-            recognizing = true;
-            document.getElementById('startRecognize').disabled = true;
-            document.getElementById('stopRecognize').disabled = false;
-            recognize();
-        };
-
-        document.getElementById('stopRecognize').onclick = () => {
-            recognizing = false;
-            document.getElementById('startRecognize').disabled = false;
-            document.getElementById('stopRecognize').disabled = true;
-        };
-
-        document.getElementById('exportBtn').onclick = exportData;
-        document.getElementById('importFile').onchange = importData;
-        document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
-
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => document.getElementById('webcam').srcObject = stream)
-                .catch(err => {
-                    console.error('無法開啟鏡頭：' + err.message + '。請檢查權限、運行在 HTTP/HTTPS 環境，或重置瀏覽器設定。');
+        /**
+         * 藍芽通訊邏輯
+         */
+        async function connectBluetooth(deviceLabel) {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    // 放寬搜尋條件：顯示所有裝置，並要求使用 NUS_SERVICE
+                    acceptAllDevices: true,
+                    optionalServices: [NUS_SERVICE_UUID]
                 });
-        } else {
-            console.error('瀏覽器不支援鏡頭 API，或未在安全環境（HTTP/HTTPS）運行。請使用現代瀏覽器並透過伺服器開啟檔案。');
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+                const characteristic = await service.getCharacteristic(NUS_RX_CHARACTERISTIC_UUID);
+                
+                logMsg(`✅ 成功連接至 ${deviceLabel} (${device.name})`, true);
+                return characteristic;
+            } catch (error) {
+                logMsg(`❌ 連接 ${deviceLabel} 失敗: ${error.message}`, true);
+                return null;
+            }
         }
 
-        initML();
+        document.getElementById('btnConnectA').addEventListener('click', async () => {
+            microbitA_Char = await connectBluetooth('Microbit A');
+            if(microbitA_Char) document.getElementById('btnConnectA').classList.replace('bg-blue-500', 'bg-green-600');
+        });
+
+        document.getElementById('btnConnectB').addEventListener('click', async () => {
+            microbitB_Char = await connectBluetooth('Microbit B');
+            if(microbitB_Char) document.getElementById('btnConnectB').classList.replace('bg-teal-500', 'bg-green-600');
+        });
+
+        function sendToMicrobits(commandStr, className) {
+            // 將字串轉為 Uint8Array
+            const encoder = new TextEncoder();
+            const data = encoder.encode(commandStr);
+            
+            let sent = false;
+
+            if (microbitA_Char) {
+                microbitA_Char.writeValue(data).catch(e => console.error("A寫入失敗", e));
+                sent = true;
+            }
+            if (microbitB_Char) {
+                microbitB_Char.writeValue(data).catch(e => console.error("B寫入失敗", e));
+                sent = true;
+            }
+
+            if (sent) {
+                // 將換行符號 \n 替換為 \r\n 方便在畫面上顯示
+                const displayCmd = commandStr.replace('\n', '\\n');
+                logMsg(`辨認結果：【${className}】 發送指令 -> ${displayCmd}`);
+            } else {
+                logMsg(`⚠️ 辨認出【${className}】，但尚未連接任何 Microbit!`, true);
+            }
+        }
+
+        // 系統啟動流程
+        initUI();
+        setupWebcam().then(() => {
+            initML();
+        });
+
     </script>
 </body>
 </html>
